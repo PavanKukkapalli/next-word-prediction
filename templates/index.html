@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Next Word Prediction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0E0E10;
+  --surface:  #16161A;
+  --surface2: #1E1E24;
+  --border:   #2A2A32;
+  --text:     #E8E8EC;
+  --muted:    #6B6B78;
+  --accent:   #7C6FCD;
+  --accent2:  #5A9CF5;
+  --success:  #4DAA6F;
+  --warn:     #D4895A;
+  --mono:     'IBM Plex Mono', monospace;
+  --sans:     'IBM Plex Sans', sans-serif;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.shell {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header {
+  margin-bottom: 52px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 28px;
+}
+.logo {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+h1 {
+  font-family: var(--mono);
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 300;
+  letter-spacing: -.01em;
+  color: var(--text);
+  line-height: 1.2;
+}
+h1 em { font-style: italic; color: var(--accent2); }
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+  font-family: var(--mono);
+}
+
+/* ── Section titles ─────────────────────────────────────────────────────── */
+.section-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 28px;
+  overflow: hidden;
+}
+.panel-body { padding: 22px 24px; }
+
+/* ── Main input ─────────────────────────────────────────────────────────── */
+.input-wrap {
+  position: relative;
+}
+#context-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 300;
+  padding: 16px 18px;
+  outline: none;
+  transition: border-color .15s;
+  resize: none;
+  min-height: 90px;
+  line-height: 1.7;
+}
+#context-input::placeholder { color: var(--muted); }
+#context-input:focus { border-color: var(--accent); }
+
+.input-hint {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+#word-count { color: var(--accent); }
+
+/* ── Prediction chips ───────────────────────────────────────────────────── */
+#predictions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 42px;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 6px 13px;
+  font-family: var(--mono);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color .1s, background .1s, transform .08s;
+  animation: chipIn .18s ease both;
+  color: var(--text);
+}
+.chip:hover { border-color: var(--accent); background: #1C1C24; transform: translateY(-1px); }
+.chip:active { transform: translateY(0); }
+
+@keyframes chipIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.chip-word { font-weight: 500; }
+.chip-score {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 300;
+}
+.chip-src {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-weight: 500;
+  letter-spacing: .05em;
+}
+.src-trigram { background: rgba(124,111,205,.18); color: var(--accent); }
+.src-bigram  { background: rgba(90,156,245,.15);  color: var(--accent2); }
+.src-unigram { background: rgba(107,107,120,.15); color: var(--muted); }
+
+.no-pred {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Autocomplete ───────────────────────────────────────────────────────── */
+.controls-row {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.ctrl-group { display: flex; flex-direction: column; gap: 5px; }
+.ctrl-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ctrl-group input[type=range] {
+  -webkit-appearance: none;
+  width: 140px;
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.ctrl-group input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+.ctrl-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  min-width: 28px;
+}
+
+#completion-output {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 16px 18px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--muted);
+  min-height: 56px;
+  word-break: break-word;
+}
+#completion-output .seed-text { color: var(--text); font-weight: 400; }
+#completion-output .gen-text  { color: var(--accent2); }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 9px 20px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all .12s;
+  background: transparent;
+  color: var(--text);
+}
+.btn:hover  { border-color: var(--accent); color: var(--accent); }
+.btn:active { opacity: .8; }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-accent:hover { background: #6b5fc2; border-color: #6b5fc2; color: #fff; }
+.btn-sm { padding: 6px 14px; font-size: 10px; }
+.btn-danger { border-color: #c04040; color: #c04040; }
+.btn-danger:hover { background: rgba(192,64,64,.1); }
+
+/* ── Train panel ─────────────────────────────────────────────────────────── */
+#train-text {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 300;
+  padding: 14px 16px;
+  outline: none;
+  resize: vertical;
+  min-height: 120px;
+  transition: border-color .15s;
+  line-height: 1.7;
+}
+#train-text:focus { border-color: var(--accent); }
+#train-text::placeholder { color: var(--muted); }
+
+.train-opts {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.radio-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.radio-opt input { accent-color: var(--accent); cursor: pointer; }
+
+/* ── Stats bar ───────────────────────────────────────────────────────────── */
+#stats-bar {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  font-family: var(--mono);
+}
+.stat-cell {
+  flex: 1;
+  padding: 14px 16px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+.stat-cell:last-child { border-right: none; }
+.stat-val  { font-size: 20px; font-weight: 500; color: var(--accent); line-height: 1; margin-bottom: 3px; }
+.stat-name { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 20px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0;
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+  z-index: 100;
+  white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.ok   { border-color: var(--success); color: var(--success); }
+#toast.err  { border-color: #c04040; color: #c04040; }
+
+/* ── Loader ──────────────────────────────────────────────────────────────── */
+.loader {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Misc ────────────────────────────────────────────────────────────────── */
+.row-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.perp-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(77,170,111,.12);
+  border: 1px solid rgba(77,170,111,.25);
+  color: var(--success);
+  border-radius: 2px;
+  padding: 3px 9px;
+  margin-left: 8px;
+}
+@media (max-width: 600px) {
+  .stat-cell { padding: 12px 10px; }
+  .stat-val  { font-size: 16px; }
+  #stats-bar { flex-wrap: wrap; }
+  .stat-cell { flex: 1 1 45%; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">NLP · Language Model</div>
+    <h1>Next <em>Word</em> Prediction</h1>
+    <div class="subtitle">N-gram model · Laplace smoothing · Stupid backoff</div>
+  </header>
+
+  <!-- ── Predict ─────────────────────────────────────────────────────────── -->
+  <div class="section-label">01 — predict</div>
+  <div class="panel">
+    <div class="panel-body">
+      <div class="input-wrap">
+        <textarea id="context-input"
+                  placeholder="start typing a sentence…"
+                  rows="3"
+                  spellcheck="false"></textarea>
+      </div>
+      <div class="input-hint">
+        <span>predictions update as you type</span>
+        <span><span id="word-count">0</span> words</span>
+      </div>
+
+      <div style="margin-top:18px;">
+        <div class="section-label" style="margin-bottom:10px">suggestions</div>
+        <div id="predictions"><span class="no-pred">start typing to see predictions</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Autocomplete ────────────────────────────────────────────────────── -->
+  <div class="section-label">02 — autocomplete</div>
+  <div class="panel">
+    <div class="panel-body">
+      <div class="controls-row">
+        <div class="ctrl-group">
+          <div class="ctrl-label">Length <span class="ctrl-val" id="len-val">8</span></div>
+          <input type="range" id="length-slider" min="3" max="20" value="8">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-label">Temperature <span class="ctrl-val" id="temp-val">0.8</span></div>
+          <input type="range" id="temp-slider" min="1" max="20" value="8">
+        </div>
+        <button class="btn btn-accent" id="complete-btn">Generate →</button>
+      </div>
+
+      <div id="completion-output">
+        <span class="no-pred">click generate to autocomplete your input</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Stats ───────────────────────────────────────────────────────────── -->
+  <div class="section-label">03 — model stats</div>
+  <div id="stats-bar">
+    <div class="stat-cell"><div class="stat-val" id="st-vocab">—</div><div class="stat-name">Vocab size</div></div>
+    <div class="stat-cell"><div class="stat-val" id="st-tokens">—</div><div class="stat-name">Tokens</div></div>
+    <div class="stat-cell"><div class="stat-val" id="st-bigrams">—</div><div class="stat-name">Bigrams</div></div>
+    <div class="stat-cell"><div class="stat-val" id="st-trigrams">—</div><div class="stat-name">Trigrams</div></div>
+    <div class="stat-cell"><div class="stat-val" id="st-perp">—</div><div class="stat-name">Perplexity</div></div>
+  </div>
+
+  <!-- ── Train ───────────────────────────────────────────────────────────── -->
+  <div class="section-label" style="margin-top:28px">04 — train on custom text</div>
+  <div class="panel">
+    <div class="panel-body">
+      <textarea id="train-text"
+                placeholder="paste any text here — the model will learn from it (min 10 words)…"
+                spellcheck="false"></textarea>
+      <div class="train-opts">
+        <label class="radio-opt">
+          <input type="radio" name="train-mode" value="add" checked> add to existing model
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="train-mode" value="replace"> replace model
+        </label>
+        <span id="train-word-count" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:auto">0 words</span>
+      </div>
+      <div class="row-btns">
+        <button class="btn btn-accent" id="train-btn">Train model</button>
+        <button class="btn btn-danger" id="reset-btn">Reset to default</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── Utilities ─────────────────────────────────────────────────────────────
+
+const $  = id => document.getElementById(id);
+const fmt = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : n;
+
+function toast(msg, type='ok') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = '', 2800);
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+
+async function loadStats() {
+  const r = await fetch('/api/stats');
+  const d = await r.json();
+  if (!d.ok) return;
+  const s = d.stats;
+  $('st-vocab').textContent    = fmt(s.vocab_size   || 0);
+  $('st-tokens').textContent   = fmt(s.total_tokens || 0);
+  $('st-bigrams').textContent  = fmt(s.unique_bigrams  || 0);
+  $('st-trigrams').textContent = fmt(s.unique_trigrams || 0);
+  $('st-perp').textContent     = s.perplexity != null ? s.perplexity : '—';
+}
+loadStats();
+
+// ── Predict ────────────────────────────────────────────────────────────────
+
+const input  = $('context-input');
+const predsEl = $('predictions');
+let predTimer = null;
+
+input.addEventListener('input', () => {
+  const words = input.value.trim().split(/\s+/).filter(Boolean);
+  $('word-count').textContent = words.length;
+
+  clearTimeout(predTimer);
+  predTimer = setTimeout(fetchPredictions, 180);
+});
+
+async function fetchPredictions() {
+  const ctx = input.value.trim();
+  if (!ctx) {
+    predsEl.innerHTML = '<span class="no-pred">start typing to see predictions</span>';
+    return;
+  }
+
+  predsEl.innerHTML = '<span class="loader"></span>';
+
+  const r = await fetch('/api/predict', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ context: ctx, top_k: 6 })
+  });
+  const d = await r.json();
+
+  if (!d.ok || !d.predictions.length) {
+    predsEl.innerHTML = '<span class="no-pred">no predictions found</span>';
+    return;
+  }
+
+  predsEl.innerHTML = '';
+  d.predictions.forEach((p, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.style.animationDelay = (i * 30) + 'ms';
+    chip.innerHTML = `
+      <span class="chip-word">${p.word}</span>
+      <span class="chip-score">${(p.score * 100).toFixed(2)}%</span>
+      <span class="chip-src src-${p.source}">${p.source}</span>`;
+    chip.addEventListener('click', () => {
+      const cur = input.value.trimEnd();
+      input.value = cur + (cur ? ' ' : '') + p.word + ' ';
+      input.dispatchEvent(new Event('input'));
+      input.focus();
+    });
+    predsEl.appendChild(chip);
+  });
+}
+
+// ── Sliders ────────────────────────────────────────────────────────────────
+
+const lenSlider  = $('length-slider');
+const tempSlider = $('temp-slider');
+const lenVal     = $('len-val');
+const tempVal    = $('temp-val');
+
+lenSlider.addEventListener('input',  () => lenVal.textContent  = lenSlider.value);
+tempSlider.addEventListener('input', () => {
+  tempVal.textContent = (tempSlider.value / 10).toFixed(1);
+});
+
+// ── Autocomplete ───────────────────────────────────────────────────────────
+
+$('complete-btn').addEventListener('click', async () => {
+  const seed = input.value.trim();
+  if (!seed) { toast('Type something first', 'err'); return; }
+
+  const btn = $('complete-btn');
+  btn.textContent = '…';
+  btn.disabled = true;
+
+  const r = await fetch('/api/autocomplete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      seed,
+      length:      parseInt(lenSlider.value),
+      temperature: parseFloat(tempSlider.value) / 10
+    })
+  });
+  const d = await r.json();
+  btn.textContent = 'Generate →';
+  btn.disabled = false;
+
+  if (!d.ok) { toast(d.error, 'err'); return; }
+
+  $('completion-output').innerHTML =
+    `<span class="seed-text">${escHtml(seed)} </span>` +
+    `<span class="gen-text">${escHtml(d.completion)}</span>`;
+});
+
+// ── Train ──────────────────────────────────────────────────────────────────
+
+const trainText = $('train-text');
+trainText.addEventListener('input', () => {
+  const w = trainText.value.trim().split(/\s+/).filter(Boolean).length;
+  $('train-word-count').textContent = w + ' words';
+});
+
+$('train-btn').addEventListener('click', async () => {
+  const text = trainText.value.trim();
+  const mode = document.querySelector('input[name=train-mode]:checked').value;
+  const btn  = $('train-btn');
+  btn.textContent = 'Training…';
+  btn.disabled = true;
+
+  const r = await fetch('/api/train', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ text, mode })
+  });
+  const d = await r.json();
+  btn.textContent = 'Train model';
+  btn.disabled = false;
+
+  if (!d.ok) { toast(d.error, 'err'); return; }
+
+  const s = d.stats;
+  toast(`Trained · vocab: ${fmt(s.vocab_size)} · perplexity: ${s.perplexity}`, 'ok');
+  loadStats();
+});
+
+$('reset-btn').addEventListener('click', async () => {
+  if (!confirm('Reset to built-in corpus?')) return;
+  await fetch('/api/reset', { method: 'POST' });
+  toast('Model reset', 'ok');
+  loadStats();
+  predsEl.innerHTML = '<span class="no-pred">start typing to see predictions</span>';
+  $('completion-output').innerHTML = '<span class="no-pred">click generate to autocomplete your input</span>';
+  input.value = '';
+  $('word-count').textContent = '0';
+});
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
