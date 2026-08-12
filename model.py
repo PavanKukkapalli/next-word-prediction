@@ -9,7 +9,7 @@ Concepts used:
   - Perplexity for model evaluation
   - Backoff: trigram → bigram → unigram
 """
-
+import os
 import re
 import json
 import math
@@ -283,49 +283,36 @@ class NGramModel:
 
 # ── Built-in training corpus ─────────────────────────────────────────────────
 
-CORPUS = """
-The quick brown fox jumps over the lazy dog. The dog barked loudly at the fox.
-The fox ran away quickly through the dark forest. The forest was full of tall trees.
-Natural language processing is a field of artificial intelligence. It helps computers
-understand human language. Machine learning models can predict the next word in a sentence.
-Deep learning has improved natural language processing significantly. Neural networks
-learn patterns from large amounts of text data. The model predicts the probability of
-each word given its context. Language models are used in autocomplete systems.
-Autocomplete helps users type faster on mobile devices. The keyboard suggests the next
-word based on previous words. This is called next word prediction. Prediction accuracy
-improves with more training data. Training data consists of text from books and websites.
-The internet contains billions of words of text. Text preprocessing removes punctuation
-and converts text to lowercase. Tokenisation splits text into individual words.
-N-gram models use sequences of n words to predict the next word. Bigram models use
-two words of context. Trigram models use three words. Higher order models capture
-longer dependencies in text. Smoothing techniques handle unseen word combinations.
-Laplace smoothing adds a small count to all possible combinations. This prevents
-zero probability for unseen words. Perplexity measures how well a language model
-fits a given text. Lower perplexity indicates a better model. The best language models
-have low perplexity on held-out test data. Recurrent neural networks improved over
-traditional n-gram models. Transformers further improved language modelling.
-The attention mechanism allows models to focus on relevant context. BERT and GPT
-are large transformer language models. They are trained on massive text corpora.
-Transfer learning allows models to be fine-tuned on specific tasks. Text generation
-produces coherent sentences by sampling from the model distribution. Temperature
-controls the randomness of text generation. Low temperature produces conservative
-predictions. High temperature produces more creative and diverse text.
-Science and technology continue to advance rapidly. Computers are becoming more
-powerful every year. Artificial intelligence is transforming many industries.
-Healthcare benefits from AI diagnosis tools. Education is changing with online
-learning platforms. Communication has been revolutionised by the internet.
-People can connect with others around the world instantly. Social media platforms
-allow sharing of ideas and information. Knowledge is more accessible than ever before.
-The human brain is a remarkable information processing system. Language is one of
-the most complex abilities humans possess. Children learn language naturally through
-exposure and practice. Reading and writing are fundamental skills for education.
-Books contain the accumulated knowledge of human civilisation. Libraries preserve
-important texts for future generations.
-"""
 
 
-def get_default_model() -> NGramModel:
-    """Return a pre-trained model on the built-in corpus."""
+def get_default_model():
+    model_path = "models/language_model.json"
+
+    # Create a new model
     m = NGramModel(n=3, k=0.1)
-    m.train(CORPUS)
+
+    # If the trained model already exists, load it
+    if os.path.exists(model_path):
+        print("Loading trained model...")
+        m.load(model_path)
+        print("Model loaded successfully.")
+        return m
+
+    # Otherwise, train from the dataset
+    print("Training model from dataset...")
+
+    with open("dataset/dataset.txt", "r", encoding="utf-8") as file:
+        text = file.read()
+
+    stats = m.train(text)
+
+    print("Training completed.")
+    print(stats)
+
+    # Save the trained model
+    os.makedirs("models", exist_ok=True)
+    m.save(model_path)
+
+    print("Model saved successfully.")
+
     return m
